@@ -57,13 +57,14 @@ def Automatic_QR_Code_Version(text:str):
 
         if value >= len("".join([format(x, "08b") for x in text.encode('utf-8')])) + 4 + padding + 4:
             return version
+    raise ValueError("Input Data is too big to fit inside any QR code.")
 
 
-data = "https://cs.wikipedia.org/wiki/QR_k%C3%B3d"
+data = "www.youtube.com"
 
-error_correction_level = "Q"       #L - Low(7%), M - Medium(15%), Q - Quartile(25%), H - High(30%)
+error_correction_level = "L"       #L - Low(7%), M - Medium(15%), Q - Quartile(25%), H - High(30%)
 masking_pattern = 0
-encoding_mode = "byte"
+encoding_mode = "alphanumeric"
 
 qr_code_version = Automatic_QR_Code_Version(data)
 
@@ -73,7 +74,7 @@ cells_per_side = 17 + 4 * qr_code_version
 print(f"""------------------------------
 Version {qr_code_version}: {cells_per_side}x{cells_per_side} 
 Error Correction Level: {error_correction_level}
-Encoding Mode: Byte
+Encoding Mode: {encoding_mode}
 Masking Pattern: {masking_pattern}
 ------------------------------""")
 cell_size = (resolution.x - quiet_zone_from_borders * 2) / cells_per_side
@@ -91,6 +92,14 @@ def Index_To_Vector2(index:int, side_amount=cells_per_side) -> Vector2:
 
 def Resize_Vector2(vector:Vector2):
     return Vector2(quiet_zone_from_borders + vector.x * cell_size + cell_size / 2, quiet_zone_from_borders + vector.y * cell_size + cell_size / 2)
+
+
+def Clamp(value, min, max):
+    if value < min:
+        return min
+    if value > max:
+        return max
+    return value
 
 
 def Generate_Circle_Patterns(one_side_size=9, start_with_black=False) ->list[None|bool]:
@@ -125,6 +134,8 @@ def Visualize_QR_Code():
         
         position = Resize_Vector2(Index_To_Vector2(index))
         pygame.draw.rect(screen, color, Rect(position.x - cell_size / 2 - adder / 2, position.y - cell_size / 2 - adder / 2, cell_size + adder, cell_size + adder))
+
+    pygame.display.update()
 
 
 def Insert_Pattern_To_Matrix(left_top_pos:Vector2, pattern:list, pattern_size):
@@ -257,7 +268,7 @@ def Generate_Draw_Format_Info():
     format_info = ecl_masking + format(format_info, "010b")     #adds ecl and masking to the front of format informations
     format_info = int(format_info, 2)
     format_info ^= 0b101010000010010    #finally XOR with this specific number
-
+    print(format(format_info, "015b"))
     #First line
     matrix[Vector2_To_Index(Vector2(8, cells_per_side - 8))] = True    #Dark module
     for i, bit in enumerate(format(format_info, "015b")):
@@ -269,11 +280,11 @@ def Generate_Draw_Format_Info():
     #Second line
     for i in range(6):
         matrix[Vector2_To_Index(Vector2(i, 8))] = bool(int(format(format_info, "015b")[i]))
-        matrix[Vector2_To_Index(Vector2(8, i))] = bool(int(format(format_info, "015b")[- i - 1]))
+        matrix[Vector2_To_Index(Vector2(8, i))] = bool(int(format(format_info, "015b")[-i - 1]))
 
-    matrix[Vector2_To_Index(Vector2(8, 7))] = bool(int(format(format_info, "015b")[6]))
+    matrix[Vector2_To_Index(Vector2(8, 7))] = bool(int(format(format_info, "015b")[8]))
     matrix[Vector2_To_Index(Vector2(8, 8))] = bool(int(format(format_info, "015b")[7]))
-    matrix[Vector2_To_Index(Vector2(7, 8))] = bool(int(format(format_info, "015b")[8]))
+    matrix[Vector2_To_Index(Vector2(7, 8))] = bool(int(format(format_info, "015b")[6]))
 
 
 def Draw_Masking_Pattern():
@@ -304,6 +315,30 @@ def Draw_Masking_Pattern():
             matrix[i] = formula(pos.x, pos.y)
 
 
+def Masking(pos:Vector2) -> bool:
+    formula = None
+    match masking_pattern:
+        case 0:
+            formula = lambda x, y: (x + y) % 2 == 0
+        case 1:
+            formula = lambda x, y: y % 2 == 0
+        case 2:
+            formula = lambda x, y: x % 3 == 0
+        case 3:
+            formula = lambda x, y: (x + y) % 3 == 0
+        case 4:
+            formula = lambda x, y: (y // 2 + x // 3) % 2 == 0
+        case 5:
+            formula = lambda x, y: (x * y) % 2 + (x * y) % 3 == 0
+        case 6:
+            formula = lambda x, y: ((x * y) % 3 + x * y) % 2 == 0
+        case 7:
+            formula = lambda x, y: ((x * y) % 3 + x + y) % 2 == 0
+        case _:
+            raise ValueError("Masking Error: Wrong Masking Value.")
+    return formula(pos.x, pos.y)
+
+
 def Get_Free_Bit_Space(version:int):
     blocks_per_side = 17 + 4 * version
     
@@ -319,6 +354,27 @@ def Get_Free_Bit_Space(version:int):
     return blocks_per_side ** 2 - finder_patterns - version_infos - alignment_patterns - timing_patterns - 31
 
 
+def Encode_To_Alphanumeric(text:str):
+    alphanumeric_dict = {
+        '0': 0,  '1': 1,  '2': 2,  '3': 3,  '4': 4,  '5': 5,  '6': 6,  '7': 7,  '8': 8,  '9': 9,   # 0-9
+        'A': 10, 'B': 11, 'C': 12, 'D': 13, 'E': 14, 'F': 15, 'G': 16, 'H': 17, 'I': 18, 'J': 19, 
+        'K': 20, 'L': 21, 'M': 22, 'N': 23, 'O': 24, 'P': 25, 'Q': 26, 'R': 27, 'S': 28, 'T': 29, 
+        'U': 30, 'V': 31, 'W': 32, 'X': 33, 'Y': 34, 'Z': 35,                                      # A-Z (10-35)
+        ' ': 36, '$': 37, '%': 38, '*': 39, '+': 40, '-': 41, '.': 42, '/': 43, ':': 44           # Special (36-44)
+    }
+
+    final_bits = ""
+    text = text.upper()
+    
+    for index in range(0, len(text), 2):
+        if index == len(text) - 1:
+            final_bits += format(alphanumeric_dict[text[index]], "06b")
+        else:
+            final_bits += format(45 * alphanumeric_dict[text[index]] + alphanumeric_dict[text[index + 1]], "011b")
+
+    return final_bits
+
+
 def Encode_Text(text:str):
     text_lenght = len(text)
 
@@ -332,7 +388,25 @@ def Encode_Text(text:str):
     encoding = mode_name_to_mode_indicator[encoding_mode] << padding
     encoding += text_lenght
 
-    encoded_text = format(encoding, f"0{padding + 4}b") + ''.join([format(x, '08b') for x in text.encode('utf-8')]) + "0000"
+    binary_text = ""
+    match encoding_mode:
+        case "byte":
+            binary_text = ''.join([format(x, '08b') for x in text.encode('utf-8')])
+        case "alphanumeric":
+            binary_text = Encode_To_Alphanumeric(text)
+        case "numeric":
+            raise TypeError("Wrong set encoding mode")
+        case "kanji":
+            raise TypeError("Wrong set encoding mode")
+        case _:
+            raise TypeError("Wrong set encoding mode")
+
+    encoded_text = format(encoding, f"0{padding + 4}b") + binary_text
+
+    terminator_addition = 8 - len(encoded_text) % 8
+    terminator_addition = 0 if 8 - len(encoded_text) % 8 == 8 else 8 - len(encoded_text) % 8
+
+    encoded_text += "0" * terminator_addition
 
     encoding_pad_bytes = "1110110000010001"
 
@@ -343,9 +417,37 @@ def Encode_Text(text:str):
         index += 1
         if index >= 16:
             index = 0
-
+    
     return encoded_text
 
+
+def Insert_Encoded_Data_Into_Matrix(encoded_data:str):
+    movement_vector = Vector2(0, -1)
+    index = 0
+    current_pos = Vector2(cells_per_side - 1, cells_per_side - 1)
+
+    while index < len(encoded_data) - 1:
+        if index != 0 and (current_pos.y <= -1 or current_pos.y >= cells_per_side):
+            movement_vector *= -1
+            current_pos.y = Clamp(current_pos.y, 0, cells_per_side - 1)
+            current_pos.x -= 2
+
+        if matrix[Vector2_To_Index(current_pos)] is None:
+            new_data = bool(int(encoded_data[index]))
+            new_data = not new_data if Masking(current_pos) == True else new_data
+
+            matrix[Vector2_To_Index(current_pos)] = new_data
+            index += 1
+
+        if matrix[Vector2_To_Index(Vector2(current_pos.x - 1, current_pos.y))] is None:
+            new_data = bool(int(encoded_data[index]))
+            new_data = not new_data if Masking(Vector2(current_pos.x - 1, current_pos.y)) == True else new_data
+
+            matrix[Vector2_To_Index(Vector2(current_pos.x - 1, current_pos.y))] = new_data
+            index += 1
+
+        current_pos += movement_vector
+        
 
 screen.fill((255, 255, 255))
 last_time = time.time()
@@ -365,12 +467,13 @@ Draw_Timing_Patterns()
 Generate_Draw_Version_Info()
 Generate_Draw_Format_Info()
 
-print(Get_Free_Bit_Space(qr_code_version))
+
 print(f"Encoded data: {Encode_Text(data)}")
+print((Get_Free_Bit_Space(qr_code_version) - number_of_data_bits[error_correction_level][qr_code_version]) // (8 * error_correction_blocks[error_correction_level][qr_code_version]))
 
+#Draw_Masking_Pattern()
 
-# Draw_Masking_Pattern()
-
+Insert_Encoded_Data_Into_Matrix(Encode_Text(data))
 
 Visualize_QR_Code()
 
