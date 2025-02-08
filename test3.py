@@ -75,5 +75,3 @@ def Polynomial_Multiplication(amount_of_ec_codewords:int):
 
 Generate_Antilog_Log_Maps()
 
-listmy = Polynomial_Multiplication(68)
-print(listmy)

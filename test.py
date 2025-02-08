@@ -1,3 +1,7 @@
+import test3
+from copy import deepcopy
+import math
+
 text = "HELLO WORLD"
 qr_code_version = 1
 encoding_mode = "alphanumeric"
@@ -51,6 +55,27 @@ def Encode_To_Alphanumeric(text:str):
             final_bits += format(45 * alphanumeric_dict[text[index]] + alphanumeric_dict[text[index + 1]], "011b")
     return final_bits
 
+def Get_Alignment_Patterns_Amount(version):
+    versions = [(1, 1), (2, 6), (7, 13), (14, 20), (21, 27), (28, 34), (35, 40)]
+    for index, min_max in enumerate(versions):
+        if min_max[0] <= version <= min_max[1]:
+            return index
+    raise ValueError("QR Code's version is too high or too low. QR Code version must be between 1-40")
+
+def Get_Free_Bit_Space(version:int):
+    blocks_per_side = 17 + 4 * version
+    
+    finder_patterns = 8 * 8 * 3
+
+    version_infos = 0 if version <= 6 else 2 * 3 * 6
+
+    alignment_patterns_amount = Get_Alignment_Patterns_Amount(version)
+    alignment_patterns = alignment_patterns_amount ** 2 * 5 * 5 + (alignment_patterns_amount - 1) * 2 * 4 * 5 if alignment_patterns_amount != 0 else 0
+
+    timing_patterns = 2 * (blocks_per_side - 2 * 8)
+
+    return blocks_per_side ** 2 - finder_patterns - version_infos - alignment_patterns - timing_patterns - 31
+
 
 def Encode_Text(text:str):
     text_lenght = len(text)
@@ -80,10 +105,8 @@ def Encode_Text(text:str):
 
     encoded_text = format(encoding, f"0{padding + 4}b") + binary_text
 
-    terminator_addition = 8 - len(encoded_text) % 8
-    terminator_addition = 0 if terminator_addition == 8 else terminator_addition
-
-    encoded_text += "0" * terminator_addition
+    encoded_text += "0" * min(4, number_of_data_bits[error_correction_level][qr_code_version] - len(encoded_text))
+    encoded_text += "0" * (-len(encoded_text) % 8)
 
     encoding_pad_bytes = "1110110000010001"
 
@@ -94,9 +117,44 @@ def Encode_Text(text:str):
         index += 1
         if index >= 16:
             index = 0
-    print([int(encoded_text[x:Clamp(x+8, 0, len(encoded_text))], 2) for x in range(0, len(encoded_text), 8)])
-    print("  ".join([encoded_text[x:Clamp(x+8, 0, len(encoded_text))] for x in range(0, len(encoded_text), 8)]))
-    return encoded_text
+    decimal_nums = [int(encoded_text[x:Clamp(x+8, 0, len(encoded_text))], 2) for x in range(0, len(encoded_text), 8)]
+    #print("  ".join([encoded_text[x:Clamp(x+8, 0, len(encoded_text))] for x in range(0, len(encoded_text), 8)]))
+    return encoded_text, decimal_nums
+
+encoded_text, encoded_text_in_decimal = Encode_Text(text)
 
 
-print(Encode_Text(text))
+error_correction_bytes_amount = math.ceil((Get_Free_Bit_Space(qr_code_version) - number_of_data_bits[error_correction_level][qr_code_version]) / 8)
+
+root_generator_polynomial = test3.Polynomial_Multiplication(error_correction_bytes_amount)
+message_polynomial = test3.Polynomial_Multiplication(len(encoded_text_in_decimal) - 1)
+message_polynomial = list(map(lambda x: {"a" : encoded_text_in_decimal[message_polynomial.index(x)], "x" : x["x"]}, message_polynomial))
+
+message_polynomial = list(map(lambda x: {"a": x["a"], "x": x["x"] + 10}, message_polynomial))
+using_generator_polynomial = list(map(lambda x: {"a": x["a"], "x": x["x"] + 15}, deepcopy(root_generator_polynomial)))
+
+xor_polynomial = deepcopy(message_polynomial)
+
+for _ in range(len(message_polynomial)):
+
+    #Get first term in the root generator polynomial
+    lead_term_of_xor_polynomial = test3.log_map[xor_polynomial[0]["a"]]
+
+    #Multiply exponents together and mod the value
+    using_generator_polynomial = list(map(lambda x: {"a": test3.antilog_map[(x["a"] + lead_term_of_xor_polynomial) % 255], "x": x["x"]}, root_generator_polynomial))
+    
+    #Add extra values to the using polynomial in case its smaller than the using generator polynomial
+    if len(using_generator_polynomial) > len(xor_polynomial):
+        for i in range(len(using_generator_polynomial) - len(xor_polynomial)):
+            xor_polynomial.append({"a": 0, "x": xor_polynomial[-1]["x"] - 1})
+
+    #XOR values from using polynomial and generator polynomial
+    for i, value in enumerate(xor_polynomial):
+        gen_value = using_generator_polynomial[i]["a"] if i < len(using_generator_polynomial) else 0
+
+        xor_polynomial[i]["a"] = xor_polynomial[i]["a"] ^ gen_value
+    
+    #Remove any alpha values that are zero
+    xor_polynomial = list(filter(lambda x: x["a"] != 0, xor_polynomial))
+
+print(f"XOR Polynomial: {[x['a'] for x in xor_polynomial]}")

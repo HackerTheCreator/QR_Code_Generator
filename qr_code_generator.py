@@ -402,7 +402,7 @@ def Encode_Text(text:str):
             raise TypeError("Wrong set encoding mode")
 
     encoded_text = format(encoding, f"0{padding + 4}b") + binary_text
-
+    #encoded_text += number_of_data_bits[error_correction_level][qr_code_version] - len(encoded_text)
     terminator_addition = 8 - len(encoded_text) % 8
     terminator_addition = 0 if 8 - len(encoded_text) % 8 == 8 else 8 - len(encoded_text) % 8
 
@@ -426,7 +426,7 @@ def Insert_Encoded_Data_Into_Matrix(encoded_data:str):
     index = 0
     current_pos = Vector2(cells_per_side - 1, cells_per_side - 1)
 
-    while index < len(encoded_data) - 1:
+    while index < len(encoded_data):
         if index != 0 and (current_pos.y <= -1 or current_pos.y >= cells_per_side):
             movement_vector *= -1
             current_pos.y = Clamp(current_pos.y, 0, cells_per_side - 1)
