@@ -2,9 +2,10 @@ import random
 import pygame
 import sys
 import time
-import math
 
 from pygame import Vector2, font, Rect
+
+import error_correction
 
 pygame.init()
 font.init()
@@ -30,6 +31,13 @@ error_correction_blocks = {
 "Q": [0, 1, 1, 2, 2, 4, 4, 6, 6, 8, 8, 8, 10, 12, 16, 12, 17, 16, 18, 21, 20, 23, 23, 25, 27, 29, 34, 34, 35, 38, 40, 43, 45, 48, 51, 53, 56, 59, 62, 65, 68],
 "H": [0, 1, 1, 2, 4, 4, 4, 5, 6, 8, 8, 11, 11, 16, 16, 18, 16, 19, 21, 25, 25, 25, 34, 30, 32, 35, 37, 40, 42, 45, 48, 51, 54, 57, 60, 63, 66, 70, 74, 77, 81]
 }   
+qr_ecc_groups = {
+            #0   1    2    3    4     5      6     7      8       9        10      11      12      13       14       15       16       17       18       19       20        21       22       23        24        25         26      27        28        29         30       31        32        33        34        35        36       37         38       39        40
+    "L": [None, [1], [1], [1], [1], [1],    [2], [2],    [2],    [2],    [2, 2], [4],    [2, 2], [4],     [3, 1],  [5, 1],  [5, 1],  [1, 5],  [5, 1],  [3, 4],  [3, 5],   [4, 4],  [2, 7],  [4, 5],   [6, 4],   [8, 4],   [10, 2], [8, 4],   [3, 10],  [7, 7],   [5, 10],  [13, 3],  [17],     [17, 1],  [13, 6],  [12, 7],  [6, 14],  [17, 4],  [4, 18],  [20, 4],  [19, 6]],
+    "M": [None, [1], [1], [1], [2], [2],    [4], [4],    [2, 2], [3, 2], [4, 1], [1, 4], [6, 2], [8, 1],  [4, 5],  [5, 5],  [7, 3],  [10, 1], [9, 4],  [3, 11], [3, 13],  [17],    [17],    [4, 14],  [6, 14],  [8, 13],  [19, 4], [22, 3],  [3, 23],  [21, 7],  [19, 10], [2, 29],  [10, 23], [14, 21], [14, 23], [12, 26], [6, 34],  [29, 14], [13, 32], [40, 7],  [18, 31]],
+    "Q": [None, [1], [1], [2], [2], [2, 2], [4], [2, 4], [4, 2], [4, 4], [6, 2], [4, 4], [4, 6], [8, 4],  [11, 5], [5, 7],  [15, 2], [1, 15], [17, 1], [17, 4], [15, 5],  [17, 6], [7, 16], [11, 14], [11, 16], [7, 22],  [28, 6], [8, 26],  [4, 31],  [1, 37],  [15, 25], [42, 1],  [10, 35], [29, 19], [44, 7],  [39, 14], [46, 10], [49, 10], [48, 14], [43, 22], [34, 34]],
+    "H": [None, [1], [1], [2], [4], [2, 2], [4], [4, 1], [4, 2], [4, 4], [6, 2], [3, 8], [7, 4], [12, 4], [11, 5], [11, 7], [3, 13], [2, 17], [2, 19], [9, 16], [15, 10], [19, 6], [34],    [16, 14], [30, 2],  [22, 13], [33, 4], [12, 28], [11, 31], [19, 26], [23, 25], [23, 28], [19, 35], [11, 46], [59, 1],  [22, 41], [2, 64],  [24, 46], [42, 32], [10, 67], [20, 61]]
+}
 character_count_indicators = {
     "numeric": [10, 12, 14],
     "alphanumeric": [9, 11, 13],
@@ -43,7 +51,6 @@ mode_name_to_mode_indicator = {
     "kanji": 8,
     "eci": 7
 }
-
 
 
 def Automatic_QR_Code_Version(text:str):
@@ -60,26 +67,29 @@ def Automatic_QR_Code_Version(text:str):
     raise ValueError("Input Data is too big to fit inside any QR code.")
 
 
-data = "www.youtube.com"
 
-error_correction_level = "L"       #L - Low(7%), M - Medium(15%), Q - Quartile(25%), H - High(30%)
-masking_pattern = 0
-encoding_mode = "alphanumeric"
+
+
+data = "WIFI:S:milak;T:WPA;P:Troubamata78;;" 
+
+error_correction_level = "Q"       #L - Low(7%), M - Medium(15%), Q - Quartile(25%), H - High(30%)
+masking_pattern = None
+encoding_mode = "byte" #byte / alphanumeric
 
 qr_code_version = Automatic_QR_Code_Version(data)
 
-quiet_zone_from_borders = 20
+quiet_zone_from_borders = 100
+
+
+
+
+
 
 cells_per_side = 17 + 4 * qr_code_version
-print(f"""------------------------------
-Version {qr_code_version}: {cells_per_side}x{cells_per_side} 
-Error Correction Level: {error_correction_level}
-Encoding Mode: {encoding_mode}
-Masking Pattern: {masking_pattern}
-------------------------------""")
 cell_size = (resolution.x - quiet_zone_from_borders * 2) / cells_per_side
 
 matrix = [None] * cells_per_side**2         #Create Image from it
+
 
 
 def Vector2_To_Index(vector:Vector2, side_amount=cells_per_side) -> int:
@@ -243,7 +253,7 @@ def Generate_Draw_Version_Info():
             matrix[Vector2_To_Index(start_pos + Vector2(x, y))] = bool(int(ver_info[y * 3 + x]))
 
 
-def Generate_Draw_Format_Info():
+def Generate_Draw_Format_Info(using_masking_pattern:int, using_matrix:list[bool]):
     match error_correction_level:
         case "L":
             ecl = 1
@@ -258,7 +268,7 @@ def Generate_Draw_Format_Info():
 
     polynomial = 0b10100110111
 
-    ecl_masking = format(ecl, "02b") + format(masking_pattern, "03b")
+    ecl_masking = format(ecl, "02b") + format(using_masking_pattern, "03b")
     format_info = int(ecl_masking, 2)
     format_info <<= 10  #change bits amount to 15
 
@@ -268,23 +278,23 @@ def Generate_Draw_Format_Info():
     format_info = ecl_masking + format(format_info, "010b")     #adds ecl and masking to the front of format informations
     format_info = int(format_info, 2)
     format_info ^= 0b101010000010010    #finally XOR with this specific number
-    print(format(format_info, "015b"))
+
     #First line
-    matrix[Vector2_To_Index(Vector2(8, cells_per_side - 8))] = True    #Dark module
+    using_matrix[Vector2_To_Index(Vector2(8, cells_per_side - 8))] = True    #Dark module
     for i, bit in enumerate(format(format_info, "015b")):
         if i <= 6:
-            matrix[Vector2_To_Index(Vector2(8, cells_per_side - 1 - i))] = bool(int(bit))
+            using_matrix[Vector2_To_Index(Vector2(8, cells_per_side - 1 - i))] = bool(int(bit))
         else:
-            matrix[Vector2_To_Index(Vector2(cells_per_side - 15 + i, 8))] = bool(int(bit))
+            using_matrix[Vector2_To_Index(Vector2(cells_per_side - 15 + i, 8))] = bool(int(bit))
 
     #Second line
     for i in range(6):
-        matrix[Vector2_To_Index(Vector2(i, 8))] = bool(int(format(format_info, "015b")[i]))
-        matrix[Vector2_To_Index(Vector2(8, i))] = bool(int(format(format_info, "015b")[-i - 1]))
+        using_matrix[Vector2_To_Index(Vector2(i, 8))] = bool(int(format(format_info, "015b")[i]))
+        using_matrix[Vector2_To_Index(Vector2(8, i))] = bool(int(format(format_info, "015b")[-i - 1]))
 
-    matrix[Vector2_To_Index(Vector2(8, 7))] = bool(int(format(format_info, "015b")[8]))
-    matrix[Vector2_To_Index(Vector2(8, 8))] = bool(int(format(format_info, "015b")[7]))
-    matrix[Vector2_To_Index(Vector2(7, 8))] = bool(int(format(format_info, "015b")[6]))
+    using_matrix[Vector2_To_Index(Vector2(8, 7))] = bool(int(format(format_info, "015b")[8]))
+    using_matrix[Vector2_To_Index(Vector2(8, 8))] = bool(int(format(format_info, "015b")[7]))
+    using_matrix[Vector2_To_Index(Vector2(7, 8))] = bool(int(format(format_info, "015b")[6]))
 
 
 def Draw_Masking_Pattern():
@@ -315,9 +325,9 @@ def Draw_Masking_Pattern():
             matrix[i] = formula(pos.x, pos.y)
 
 
-def Masking(pos:Vector2) -> bool:
+def Masking(pos:Vector2, using_masking_pattern) -> bool:
     formula = None
-    match masking_pattern:
+    match using_masking_pattern:
         case 0:
             formula = lambda x, y: (x + y) % 2 == 0
         case 1:
@@ -388,6 +398,8 @@ def Encode_Text(text:str):
     encoding = mode_name_to_mode_indicator[encoding_mode] << padding
     encoding += text_lenght
 
+    text = text.replace("\n", "")
+
     binary_text = ""
     match encoding_mode:
         case "byte":
@@ -402,11 +414,9 @@ def Encode_Text(text:str):
             raise TypeError("Wrong set encoding mode")
 
     encoded_text = format(encoding, f"0{padding + 4}b") + binary_text
-    #encoded_text += number_of_data_bits[error_correction_level][qr_code_version] - len(encoded_text)
-    terminator_addition = 8 - len(encoded_text) % 8
-    terminator_addition = 0 if 8 - len(encoded_text) % 8 == 8 else 8 - len(encoded_text) % 8
 
-    encoded_text += "0" * terminator_addition
+    encoded_text += "0" * min(4, number_of_data_bits[error_correction_level][qr_code_version] - len(encoded_text))
+    encoded_text += "0" * (-len(encoded_text) % 8)
 
     encoding_pad_bytes = "1110110000010001"
 
@@ -417,11 +427,50 @@ def Encode_Text(text:str):
         index += 1
         if index >= 16:
             index = 0
-    
-    return encoded_text
+    decimal_nums = [int(encoded_text[x:Clamp(x+8, 0, len(encoded_text))], 2) for x in range(0, len(encoded_text), 8)]
+    #print("  ".join([encoded_text[x:Clamp(x+8, 0, len(encoded_text))] for x in range(0, len(encoded_text), 8)]))
+    return decimal_nums
 
 
-def Insert_Encoded_Data_Into_Matrix(encoded_data:str):
+def Split_Data(data_in_decimal:list[int]):
+    data_per_block = len(data_in_decimal) // sum(qr_ecc_groups[error_correction_level][qr_code_version])
+    splited_data = []
+    using_group = qr_ecc_groups[error_correction_level][qr_code_version][0]
+
+    ec_bytes_amount_per_block = (Get_Free_Bit_Space(qr_code_version) - number_of_data_bits[error_correction_level][qr_code_version]) // (8 * sum(qr_ecc_groups[error_correction_level][qr_code_version]))
+
+    ec = error_correction.Error_Correction()
+
+    last_index = 0
+    block_index = 0
+    while last_index < sum(qr_ecc_groups[error_correction_level][qr_code_version]):
+        new_data = data_in_decimal[block_index:block_index + data_per_block]
+        splited_data.append([new_data, ec.Generate_Error_Correction(new_data, None, None, ec_bytes_amount_per_block)])
+        
+        last_index += 1
+        block_index += data_per_block
+
+        if last_index == using_group:
+            data_per_block += 1
+
+    return splited_data
+
+
+def Blocks_Interleaving(splited_data:list[list[list[int], list[int]]]) -> tuple[list[int], list[int]]:
+    def Loop(using_list:list[int], using_index:int):
+        new_interleaved_codewords = []
+
+        all_codewords = [x[using_index] for x in using_list]
+        for i in range(len(using_list[-1][using_index])):
+            for codeword in all_codewords:
+                if i < len(codeword):
+                    new_interleaved_codewords.append(codeword[i])
+        return new_interleaved_codewords
+
+    return Loop(splited_data, 0), Loop(splited_data, 1)
+
+
+def Insert_Encoded_Data_Into_Matrix(using_matrix:list[bool], encoded_data:str, using_masking_pattern:int):
     movement_vector = Vector2(0, -1)
     index = 0
     current_pos = Vector2(cells_per_side - 1, cells_per_side - 1)
@@ -429,25 +478,93 @@ def Insert_Encoded_Data_Into_Matrix(encoded_data:str):
     while index < len(encoded_data):
         if index != 0 and (current_pos.y <= -1 or current_pos.y >= cells_per_side):
             movement_vector *= -1
+
+            if current_pos.x == 8:  #Vertical Timing Exception
+                current_pos.x -= 1
+
             current_pos.y = Clamp(current_pos.y, 0, cells_per_side - 1)
             current_pos.x -= 2
+            
 
-        if matrix[Vector2_To_Index(current_pos)] is None:
+        if using_matrix[Vector2_To_Index(current_pos)] is None:
             new_data = bool(int(encoded_data[index]))
-            new_data = not new_data if Masking(current_pos) == True else new_data
+            new_data = not new_data if Masking(current_pos, using_masking_pattern) == True else new_data
 
-            matrix[Vector2_To_Index(current_pos)] = new_data
+            using_matrix[Vector2_To_Index(current_pos)] = new_data
             index += 1
 
-        if matrix[Vector2_To_Index(Vector2(current_pos.x - 1, current_pos.y))] is None:
+        if using_matrix[Vector2_To_Index(Vector2(current_pos.x - 1, current_pos.y))] is None:
             new_data = bool(int(encoded_data[index]))
-            new_data = not new_data if Masking(Vector2(current_pos.x - 1, current_pos.y)) == True else new_data
+            new_data = not new_data if Masking(Vector2(current_pos.x - 1, current_pos.y), using_masking_pattern) == True else new_data
 
-            matrix[Vector2_To_Index(Vector2(current_pos.x - 1, current_pos.y))] = new_data
+            using_matrix[Vector2_To_Index(Vector2(current_pos.x - 1, current_pos.y))] = new_data
             index += 1
 
         current_pos += movement_vector
-        
+
+
+def Masking_Evaluation(using_matrix:list[bool]) -> int:
+    penalty_score = 0
+
+    def Rotate_Index(index:int, rotate:bool):
+        if rotate:
+            old_vector = Index_To_Vector2(index)
+            return Vector2_To_Index(Vector2(old_vector.y, old_vector.x))
+        return index
+
+    def First_Evaluation():
+        score = 0
+        new_score = 0
+        for i in range(2):
+            
+            using_module = 0
+            module_amount_of_same_color = 0
+            for index in range(len(using_matrix)):
+                if using_matrix[Rotate_Index(index, i == 1)] == using_matrix[using_module] and Index_To_Vector2(index).y == Index_To_Vector2(using_module).y:
+                    module_amount_of_same_color += 1
+                else:
+                    if module_amount_of_same_color >= 5:
+                        new_score += module_amount_of_same_color - 2
+                    module_amount_of_same_color = 1
+                    using_module = Rotate_Index(index, i == 1)
+            score += new_score
+        return score
+
+    def Second_Evaluation():
+        score = 0
+        for i, value in enumerate(using_matrix):
+            if using_matrix[min(len(using_matrix) - 1, i + 1)] == value and using_matrix[min(len(using_matrix) - 1, i + cells_per_side)] == value and using_matrix[min(len(using_matrix) - 1, i + 1 + cells_per_side)] == value:
+                score += 3
+        return score
+    
+    def Third_Evaluation():
+        testing_list = [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0]
+        score = 0
+        for i in range(len(using_matrix)):
+            pos = Index_To_Vector2(i)
+            if using_matrix[i:len(testing_list) - 1 + i] == testing_list or using_matrix[i:len(testing_list) - 1 + i] == reversed(testing_list):
+                score += 40
+
+        return score
+
+    def Fourth_Evaluation():
+        module_amount = cells_per_side**2
+        dark_module_amount = len(list(filter(lambda x: x == True, using_matrix)))
+        percentage = (dark_module_amount / module_amount) * 100
+        first = percentage - percentage % 5
+        second = percentage + 4 
+        first = abs(first - 50) // 5
+        second = abs(second - 50) // 5
+        if first <= second:
+            return first * 10
+        else:
+            return second * 10
+
+    penalty_score = First_Evaluation() + Second_Evaluation() + Third_Evaluation() + Fourth_Evaluation()
+
+    return penalty_score
+
+
 
 screen.fill((255, 255, 255))
 last_time = time.time()
@@ -465,19 +582,51 @@ Draw_Alignment_Patterns()
 Draw_Timing_Patterns()
 
 Generate_Draw_Version_Info()
-Generate_Draw_Format_Info()
 
+encoded_data = Encode_Text(data)
 
-print(f"Encoded data: {Encode_Text(data)}")
-print((Get_Free_Bit_Space(qr_code_version) - number_of_data_bits[error_correction_level][qr_code_version]) // (8 * error_correction_blocks[error_correction_level][qr_code_version]))
+splited_data = Split_Data(encoded_data)
+data_codewords, ec_codewords = Blocks_Interleaving(splited_data)
+
+final_message = ''.join([format(x, '08b') for x in data_codewords + ec_codewords])
+
+reminder_bits_amount = Get_Free_Bit_Space(qr_code_version) - len(final_message)
+if reminder_bits_amount < 0:
+    raise MemoryError("Imported Data are way too big for this qr code version and it's error correction level")
+final_message += "0" * reminder_bits_amount
 
 #Draw_Masking_Pattern()
 
-Insert_Encoded_Data_Into_Matrix(Encode_Text(data))
+if masking_pattern is None: #masking evaluation
+    all_evaluation_matrixs = []
+    for i in range(0, 8):
+        using_matrix = matrix.copy()
+        Generate_Draw_Format_Info(i, using_matrix)
+        Insert_Encoded_Data_Into_Matrix(using_matrix, final_message, i)
+
+        penalty_index = Masking_Evaluation(using_matrix)
+        all_evaluation_matrixs.append((using_matrix, penalty_index, i))
+
+    lowest_penalty_scored_matrix = sorted(all_evaluation_matrixs, key=lambda x: x[1])[0]
+    
+    print([(x[1], x[2]) for x in sorted(all_evaluation_matrixs, key=lambda x: x[1])])
+
+    matrix = lowest_penalty_scored_matrix[0]
+    masking_pattern = lowest_penalty_scored_matrix[2]
+else:
+    Generate_Draw_Format_Info(masking_pattern, matrix)
+    Insert_Encoded_Data_Into_Matrix(matrix, final_message, masking_pattern)
 
 Visualize_QR_Code()
 
 print(f"Done: {time.time() - last_time}s")
+
+print(f"""------------------------------
+Version {qr_code_version}: {cells_per_side}x{cells_per_side} 
+Error Correction Level: {error_correction_level}
+Encoding Mode: {encoding_mode}
+Masking Pattern: {masking_pattern}
+------------------------------""")
 
 while running:
     for event in pygame.event.get():
