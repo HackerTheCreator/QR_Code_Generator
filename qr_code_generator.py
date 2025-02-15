@@ -70,7 +70,7 @@ def Automatic_QR_Code_Version(text:str):
 
 
 
-data = "WIFI:S:milak;T:WPA;P:Troubamata78;;" 
+data = "Hello World" 
 
 error_correction_level = "Q"       #L - Low(7%), M - Medium(15%), Q - Quartile(25%), H - High(30%)
 masking_pattern = None
