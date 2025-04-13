@@ -608,8 +608,6 @@ if masking_pattern is None: #masking evaluation
         all_evaluation_matrixs.append((using_matrix, penalty_index, i))
 
     lowest_penalty_scored_matrix = sorted(all_evaluation_matrixs, key=lambda x: x[1])[0]
-    
-    print([(x[1], x[2]) for x in sorted(all_evaluation_matrixs, key=lambda x: x[1])])
 
     matrix = lowest_penalty_scored_matrix[0]
     masking_pattern = lowest_penalty_scored_matrix[2]
@@ -619,7 +617,7 @@ else:
 
 Visualize_QR_Code()
 
-print(f"Done: {time.time() - last_time}s")
+print(f"Done: {round(time.time() - last_time, 4)}s")
 
 print(f"""------------------------------
 Version {qr_code_version}: {cells_per_side}x{cells_per_side} 
